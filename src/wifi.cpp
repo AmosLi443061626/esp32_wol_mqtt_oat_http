@@ -68,6 +68,7 @@ void handleRoot() {
   html += "<p>内网 IP：" + WiFi.localIP().toString() + "</p>";
   html += "<p>运行时间：" + String(millis() / 1000) + " 秒</p>";
   html += "<p>可用内存：" + String(ESP.getFreeHeap()) + " 字节</p>";
+  html += "<p>芯片内部温度（ESP32-S3 N16R8）：" + String(temperatureRead(), 1) + " °C</p>";
   if (provisioning) {
     html += "<h2>配置联网 Wi-Fi</h2><form method='post' action='/configure'>"
             "<p><label>SSID <input name='ssid' maxlength='32' required></label></p>"
