@@ -1,4 +1,5 @@
 #include "http_auth.h"
+#include "watchdog.h"
 #include "wifi_config.h"
 #include "firmware_version.h"
 #include "wol.h"
@@ -67,6 +68,13 @@ void handleRoot() {
   html += "</p><p>Wi-Fi：" + escapeHtml(connecting ? pendingSsid : savedSsid) + "</p>";
   html += "<p>内网 IP：" + WiFi.localIP().toString() + "</p>";
   html += "<p>运行时间：" + String(millis() / 1000) + " 秒</p>";
+  if (watchdogIsActive()) {
+    const uint32_t fedAt = watchdogLastFeedMillis();
+    html += "<p>看门狗：运行中；上次成功喂狗：启动后 " + String(fedAt / 1000) +
+            " 秒（距今 " + String((millis() - fedAt) / 1000) + " 秒）</p>";
+  } else {
+    html += "<p>看门狗：未启用</p>";
+  }
   html += "<p>可用内存：" + String(ESP.getFreeHeap()) + " 字节</p>";
   html += "<p>芯片内部温度（ESP32-S3 N16R8）：" + String(temperatureRead(), 1) + " °C</p>";
   if (provisioning) {
@@ -111,6 +119,7 @@ class ResponsePreview : public Stream {
   ResponsePreview() { body.reserve(4096); }
   size_t write(uint8_t value) override { return write(&value, 1); }
   size_t write(const uint8_t* data, size_t length) override {
+    watchdogFeed();
     const size_t remaining = 4096 - body.length();
     const size_t take = length < remaining ? length : remaining;
     if (take) body.concat(reinterpret_cast<const char*>(data), take);

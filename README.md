@@ -1,5 +1,14 @@
 # ESP32 WOL / 巴法云 MQTT / OTA
 
+## 看门狗
+
+`src/watchdog_config.h` 可配置主循环看门狗：
+
+- `WATCHDOG_TIMEOUT_SECONDS = 60`：主任务超过 60 秒没有喂狗时触发复位。
+- `WATCHDOG_FEED_INTERVAL_MS = 2000`：正常运行每 2 秒喂狗，必须小于超时时间。
+
+主循环及持续推进的 OTA 上传/下载、HTTP 正文读取、NTP 等待会喂狗；没有进展的阻塞操作仍会超时。网络连接和读取可能阻塞数秒，建议超时保留 60 秒。修改配置后重新编译并烧录。看门狗针对任务卡死，不会仅因 Wi-Fi/MQTT 掉线而复位。
+
 ## 路由
 
 - `http://设备IP:34567/`：Wi-Fi 和设备状态。

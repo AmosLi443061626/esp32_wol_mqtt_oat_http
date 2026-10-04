@@ -1,5 +1,6 @@
 #include "http_auth.h"
 #include "ota.h"
+#include "watchdog.h"
 #include "mqtt.h"
 #include "wifi_config.h"
 #include "firmware_version.h"
@@ -62,6 +63,7 @@ void page() {
 }
 void upload() {
   HTTPUpload& data = web->upload();
+  watchdogFeed();
   if (data.status == UPLOAD_FILE_START) {
     uploadAllowed = !busy && !remotePending && !restartPending &&
       WiFi.status() == WL_CONNECTED && httpCredentialsValid(*web);
@@ -98,7 +100,10 @@ bool syncTime() {
   if (time(nullptr) > 1700000000) return true;
   configTime(0, 0, "pool.ntp.org", "time.cloudflare.com", "ntp.aliyun.com");
   const uint32_t start = millis();
-  while (time(nullptr) <= 1700000000 && millis() - start < 20000) delay(100);
+  while (time(nullptr) <= 1700000000 && millis() - start < 20000) {
+    watchdogFeed();
+    delay(100);
+  }
   return time(nullptr) > 1700000000;
 }
 void configureTls(WiFiClientSecure& client) {
@@ -111,6 +116,7 @@ class MetadataStream : public Stream {
   MetadataStream() { value.reserve(4096); }
   size_t write(uint8_t c) override { return write(&c, 1); }
   size_t write(const uint8_t* data, size_t length) override {
+    watchdogFeed();
     size_t space = 4096 - value.length();
     size_t take = length < space ? length : space;
     if (take) value.concat(reinterpret_cast<const char*>(data), take);
@@ -174,6 +180,7 @@ void remoteUpdate(String url) {
   updater.rebootOnUpdate(false);
   updater.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
   updater.onProgress([](int current, int total) {
+    watchdogFeed();
     static uint32_t loggedAt = 0;
     if (millis() - loggedAt >= 1000) {
       loggedAt = millis(); WIFI_LOG_PRINTF("OTA download: %d / %d bytes\n", current, total);
