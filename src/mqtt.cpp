@@ -1,5 +1,6 @@
 #include "http_auth.h"
 #include "mqtt.h"
+#include "device_restart.h"
 #include "ota.h"
 #include "mqtt_config.h"
 #include "wifi_config.h"
@@ -144,7 +145,7 @@ void page() {
     "<p>开关主题 "
     "<input name='topic' maxlength='64' placeholder='例如 computer006' value='" + escape(topic) + "' required></p>"
     "<p>先在巴法云控制台创建同名 MQTT 开关主题，仅字母数字，以 006 结尾。</p>"
-    "<button>保存并重新连接</button></form>"
+    "<button>保存并重启设备</button></form>"
     "<p>on 唤醒所有已保存的 WOL 设备；off 仅更新状态，WOL 不支持关机。</p>"
     "<p><a href='/wol'>管理 WOL 设备</a> · <a href='/ota'>OTA 固件升级</a></p></body></html>";
   web->sendHeader("Cache-Control", "no-store");
@@ -169,18 +170,14 @@ void configure() {
   if (!saveConfiguration(newHost, newPort, newKey, newTopic)) {
     web->send(500, "text/plain; charset=utf-8", "MQTT 配置保存或读取校验失败。"); return;
   }
-  stopClient(); // Stops event callbacks before changing strings they access.
-  topic = newTopic;
-  host = newHost;
-  port = newPort;
-  privateKey = newKey;
-
-  switchOn = false;
-  reportPending = false;
-  lastResult = "配置已更新，等待指令";
-  attemptedStart = false;
-  web->sendHeader("Location", "/mqtt");
-  web->send(303, "text/plain", "");
+  // Keep the running client's strings intact until reboot. Do not stop/destroy
+  // the MQTT task inside an HTTP handler, where it can block the main loop.
+  web->sendHeader("Cache-Control", "no-store");
+  web->sendHeader("Connection", "close");
+  web->send(200, "text/html; charset=utf-8",
+    "<!doctype html><meta charset='utf-8'><p>巴法云配置已保存并校验，设备将在约 1 秒后重启。</p>"
+    "<p>重新联网后使用新配置连接巴法云。</p><a href='/mqtt'>返回 MQTT 页面</a>");
+  deviceScheduleRestart();
 }
 }
 

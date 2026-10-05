@@ -3,6 +3,7 @@
 #include "mqtt.h"
 #include "ota.h"
 #include "watchdog.h"
+#include "device_restart.h"
 
 void setup() {
 #if WIFI_SERIAL_DEBUG
@@ -14,9 +15,12 @@ void setup() {
 }
 
 void loop() {
-  wifiLoop();
-  mqttLoop();
-  otaLoop();
+  if (!deviceRestartPending()) wifiLoop();
+  if (!deviceRestartPending()) {
+    mqttLoop();
+    otaLoop();
+  }
+  deviceRestartLoop();
   watchdogFeed();
   delay(50);
 }

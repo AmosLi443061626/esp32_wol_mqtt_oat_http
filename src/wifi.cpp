@@ -1,4 +1,5 @@
 #include "http_auth.h"
+#include "device_restart.h"
 #include "watchdog.h"
 #include "wifi_config.h"
 #include "firmware_version.h"
@@ -85,6 +86,9 @@ void handleRoot() {
             "<p>联网成功后保存配置并自动重启，热点会关闭。通过串口查看设备内网 IP。</p>";
     if (connecting) html += "<p>正在连接，请稍候。</p>";
   }
+  html += "<h2>设备操作</h2><form method='post' action='/restart' "
+          "onsubmit='return confirm(\"确认重启设备？\")'>"
+          "<button type='submit'>重启设备</button></form>";
   html += "<h2>重新配网</h2><form method='post' action='/wifi/clear' "
           "onsubmit='return confirm(\"确认清除 Wi-Fi 配置并重启进入配网模式？\")'>"
           "<button type='submit'>清除 Wi-Fi 配置</button></form>";
@@ -182,6 +186,14 @@ void handleRequestTest() {
   server.send(200, "text/html; charset=utf-8", html);
 }
 
+void handleRestartDevice() {
+  server.sendHeader("Cache-Control", "no-store");
+  server.sendHeader("Connection", "close");
+  server.send(200, "text/html; charset=utf-8",
+    "<!doctype html><meta charset='utf-8'><p>设备将在约 1 秒后重启，请稍后刷新页面。</p>");
+  deviceScheduleRestart();
+}
+
 void handleClearWifi() {
   if (!storageReady || !preferences.clear()) {
     server.send(500, "text/plain; charset=utf-8", "Wi-Fi 配置清除失败，请查看存储状态。");
@@ -276,6 +288,7 @@ void wifiSetup() {
   httpOn(server, "/", HTTP_GET, handleRoot);
   httpOn(server, "/configure", HTTP_POST, handleConfigure);
   httpOn(server, "/wifi/clear", HTTP_POST, handleClearWifi);
+  httpOn(server, "/restart", HTTP_POST, handleRestartDevice);
   httpOn(server, "/http", HTTP_GET, handleHttpPage);
   httpOn(server, "/http", HTTP_POST, handleRequestTest);
   server.onNotFound([]() { if (httpRequireAuthentication(server)) server.send(404, "text/plain", "Not found"); });
@@ -334,7 +347,7 @@ void wifiLoop() {
     resetHeld = false;
   }
   server.handleClient();
-  if (wifiClearPending) return;
+  if (wifiClearPending || deviceRestartPending()) return;
   // HTTP handlers may update connectStarted/lastRetry. Sample time afterwards
   // to prevent unsigned underflow and an immediate false timeout.
   now = millis();
